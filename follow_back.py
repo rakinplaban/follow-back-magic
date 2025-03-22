@@ -8,7 +8,7 @@ load_dotenv(verbose=True)
 
 # Load token from environment variables
 GITHUB_TOKEN = os.getenv("GH_TOKEN")
-USERNAME = "your_github_username"
+
 
 # Authenticate with GitHub API
 g = Github(GITHUB_TOKEN)
