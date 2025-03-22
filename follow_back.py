@@ -29,6 +29,14 @@ current_followers = [follower.login for follower in user.get_followers()]
 # Determine users who unfollowed
 unfollowers = set(previous_followers) - set(current_followers)
 
+# for followers in current_followers:
+#     try:
+#         follow_user = g.get_user(followers)  # Convert to NamedUser
+#         user.add_to_following(follow_user)
+#         print(f"Followed {followers}")
+#     except Exception as e:
+#         print(f"Error following {followers}: {e}")
+
 # Unfollow only those who previously followed but now unfollowed
 for unfollower in unfollowers:
     try:
