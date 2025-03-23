@@ -1,7 +1,7 @@
 from github import Github
 import os
 from dotenv import load_dotenv
-import json
+import sqlite3
 
 
 load_dotenv(verbose=True)
@@ -14,37 +14,56 @@ GITHUB_TOKEN = os.getenv("GH_TOKEN")
 g = Github(GITHUB_TOKEN)
 user = g.get_user()
 
-# Load previous followers from a file (or create an empty list)
-followers_file = "followers.json"
-if os.path.exists(followers_file):
-    with open(followers_file, "r") as f:
-        previous_followers = json.load(f)
-else:
-    previous_followers = []
+# Initialize SQLite database
+db_file = "followers.db"
+conn = sqlite3.connect(db_file)
+cursor = conn.cursor()
 
 
-# Get current followers
-current_followers = [follower.login for follower in user.get_followers()]
+# Create table if it doesn’t exist
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS followers (
+        username TEXT PRIMARY KEY
+    )
+""")
+conn.commit()
 
-# Determine users who unfollowed
-unfollowers = set(previous_followers) - set(current_followers)
+# Get current followers and following
+followers = {f.login for f in user.get_followers()}
+following = {f.login for f in user.get_following()}
 
-for followers in current_followers:
-    try:
-        follow_user = g.get_user(followers)  # Convert to NamedUser
-        user.add_to_following(follow_user)
-    except Exception as e:
-        print(f"Error following {followers}: {e}")
+# Fetch previously stored followers
+cursor.execute("SELECT username FROM followers")
+tracked_followers = {row[0] for row in cursor.fetchall()}
 
-# Unfollow only those who previously followed but now unfollowed
+# New followers to track
+new_followers = followers - tracked_followers
+for follower in new_followers:
+    cursor.execute("INSERT INTO followers (username) VALUES (?)", (follower,))
+conn.commit()
+
+# Users to unfollow (only those who were tracked and now unfollowed)
+unfollowers = tracked_followers - followers
 for unfollower in unfollowers:
     try:
-        unfollow_user = g.get_user(unfollower)  # Convert to NamedUser
-        user.remove_from_following(unfollow_user)
+        user.remove_from_following(g.get_user(unfollower))
         print(f"Unfollowed {unfollower} (they unfollowed me first!)")
+        cursor.execute("DELETE FROM followers WHERE username = ?", (unfollower,))
     except Exception as e:
         print(f"Error unfollowing {unfollower}: {e}")
+conn.commit()
 
-# Save the new followers list
-with open(followers_file, "w") as f:
-    json.dump(current_followers, f)
+# Follow back new followers
+to_follow = followers - following
+for username in to_follow:
+    try:
+        user.add_to_following(g.get_user(username))
+        # print(f"Followed back: {username}")
+    except Exception as e:
+        print(f"Error following {username}: {e}")
+
+# Close DB connection
+conn.close()
+
+
+
